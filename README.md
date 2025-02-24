@@ -18,7 +18,7 @@ RandGen 是一款灵活的命令行工具，可以根据多种自定义选项生
 要使用 RandGen，请克隆代码库或下载脚本文件。
 
 ```bash
-[git clone https://github.com/your-repository/RandGen.git](https://github.com/TRFCUTTFwww/randgen.git)
+git clone https://github.com/your-repository/RandGen.git
 cd RandGen
 ```
 
