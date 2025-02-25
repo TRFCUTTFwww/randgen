@@ -7,6 +7,7 @@ import os
 import tempfile
 import configparser
 import re
+import math  # 导入 math 模块
 # import ast  # 移除 ast 导入
 
 
@@ -164,6 +165,7 @@ def parse_hashes(hash_string):
             else:
                 print(f"警告: 不支持的哈希算法 '{algo}'，已忽略")
         return valid_algorithms
+
 # --- 表达式解析 ---
 
 def parse_expression(expression):
@@ -353,6 +355,24 @@ def generate_from_expression(expression, min_length, max_length, args):
         result.append(generated_string)
     return result
 
+# --- 计算熵值函数 ---
+def calculate_entropy(s):
+    """计算字符串的熵值 (以比特为单位)"""
+    if not s:
+        return 0
+    length = len(s)
+    seen = dict(((x, 0) for x in string.printable))  # 初始化所有可打印字符的计数
+    for char in s:
+        seen[char] += 1
+
+    entropy = 0
+    for count in seen.values():
+        if count > 0:
+            probability = float(count) / length
+            entropy -= probability * math.log(probability, 2)  # 使用 math.log 以 2 为底
+
+    return entropy
+
 # --- 主函数 ---
 
 def main():
@@ -396,10 +416,7 @@ usage: RandGen.py [-h] [-l LENGTH | -r] [-c COUNT] [-s] [-S] [-nr] [-i INPUT] [-
                         可以使用逗号分隔多个算法, 例如: -hash md5,sha256。
                         特殊值: 'n' (常用算法), 'a' (所有可用算法)。
   -nv                   不输出到控制台
-  -add [ADD ...]        添加配置项 (仅在 -m w 时使用): 类型(re/cc) 名称 '值(表达式用双引号)'
-  -rm REMOVE, --remove REMOVE  删除配置项 (仅在 -m w 时使用): 名称
-  -up [UP ...]          更新配置项 (仅在 -m w 时使用): 类型(re/cc) 名称 '值(表达式用双引号)'
-  -list, --list         列出所有配置 (仅在 -m w 时使用)
+  -set                  设置配置
 
 注意:
   - 表达式模式下，字符串字面量用单引号或双引号括起来, 例如:  ['123', n(5)]
@@ -419,6 +436,7 @@ usage: RandGen.py [-h] [-l LENGTH | -r] [-c COUNT] [-s] [-S] [-nr] [-i INPUT] [-
     parser.add_argument('-o', '--output', type=str, help="导出到文件")
     parser.add_argument('-hash', help="哈希算法", dest='hash_algorithms', metavar='ALGORITHMS', type=parse_hashes)
     parser.add_argument('-nv', action='store_true', help="不输出到控制台")
+    parser.add_argument('-e', '--entropy', action='store_true', help="计算并显示熵值")  # 添加 -e 参数
     parser.add_argument('-set', help="设置配置")
 
     # -m w 的子命令 (直接添加到主解析器)
@@ -467,8 +485,6 @@ usage: RandGen.py [-h] [-l LENGTH | -r] [-c COUNT] [-s] [-S] [-nr] [-i INPUT] [-
             set_config_value(config_name, 'value', config_value)
             print(f"已添加配置: {config_name}")
 
-
-
         elif args.remove:  # 使用 args.remove
             config_name = args.remove
             if config.has_section(config_name):
@@ -504,7 +520,7 @@ usage: RandGen.py [-h] [-l LENGTH | -r] [-c COUNT] [-s] [-S] [-nr] [-i INPUT] [-
             else:
                 print("没有自定义配置")
         else:
-            print("错误：在 -m w 模式下，必须指定 -add, -del, -up 或 -list 中的一个")  # 更正此处的错误消息
+            print("错误：在 -m w 模式下，必须指定 -add, -del, -up 或 -list 中的一个")
         return
     # --- 处理 $ 引用 ---
     if args.mode.startswith('$'):
@@ -513,7 +529,6 @@ usage: RandGen.py [-h] [-l LENGTH | -r] [-c COUNT] [-s] [-S] [-nr] [-i INPUT] [-
             config_type = get_config_value(config_name, 'type', '')
             config_value = get_config_value(config_name, 'value', '')
             if config_type == 're':
-                # config_value = config_value.replace("'", '"')  # 不需要了
                 try:
                     result = generate_from_expression(config_value, min_length, max_length, args)
                 except ValueError as e:
@@ -538,8 +553,6 @@ usage: RandGen.py [-h] [-l LENGTH | -r] [-c COUNT] [-s] [-S] [-nr] [-i INPUT] [-
         else:
             print(f"错误: 配置 '{config_name}' 不存在")
             return
-
-
 
     elif args.mode.startswith('[') and args.mode.endswith(']'):
         result = generate_from_expression(args.mode, min_length, max_length, args)
@@ -581,12 +594,10 @@ usage: RandGen.py [-h] [-l LENGTH | -r] [-c COUNT] [-s] [-S] [-nr] [-i INPUT] [-
             result = generate_numeric(current_min_length, current_max_length, args.count, args.no_repeat)
         elif args.mode == 'a':
             result = generate_alpha(current_min_length, current_max_length, args.count,
-                                    #  'lower' if args.lower else 'upper' if args.upper else '', args.no_repeat) # 移除
-                                     '',args.no_repeat)  # 始终传入空字符串
+                                     '', args.no_repeat)  # 始终传入空字符串
         elif args.mode == 'an':
             result = generate_alphanumeric(current_min_length, current_max_length, args.count,
-                                            # 'lower' if args.lower else 'upper' if args.upper else '', args.no_repeat) # 移除
-                                             '', args.no_repeat) # 始终传入空字符串
+                                           '', args.no_repeat) # 始终传入空字符串
         elif args.mode == 'cc':
             if not args.input:
                 raise ValueError("cc 模式需要使用 -i 参数指定字符集")
@@ -598,9 +609,14 @@ usage: RandGen.py [-h] [-l LENGTH | -r] [-c COUNT] [-s] [-S] [-nr] [-i INPUT] [-
     elif args.upper:
         result = [s.upper() for s in result]
 
-    if not args.nv:
+    # --- 输出和熵值计算 ---
+    if not args.nv:  # 输出到控制台
         for item in result:
-            print(item)
+            if args.entropy:  # 如果使用了 -e 选项
+                entropy = calculate_entropy(item)
+                print(f"{item}   (entropy:{entropy:.2f})")
+            else:
+                print(item)
 
     if args.output:
         output_file_path = args.output
