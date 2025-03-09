@@ -621,15 +621,19 @@ usage: RandGen.py [-h] [-l LENGTH | -r] [-c COUNT] [-s] [-S] [-nr] [-i INPUT] [-
     if args.output:
         output_file_path = args.output
         with open(output_file_path, 'w') as file:
-            for item in result:
-                file.write(f"{item}\n")
+            # 使用列表推导和 str.join 来避免在最后一行添加换行符
+            file.write("".join(f"{item}\n" for item in result[:-1]))
+            if result:  # 避免写入空文件
+                file.write(result[-1]) #最后一行不加换行符
         print(f"字符串已导出到: {output_file_path}")
     else:
         temp_dir = tempfile.gettempdir()
         output_file_path = os.path.join(temp_dir, "generated_strings.txt")
         with open(output_file_path, 'w') as file:
-            for item in result:
-                file.write(f"{item}\n")
+            file.write("".join(f"{item}\n" for item in result[:-1]))
+            if result:
+                file.write(result[-1])
+
 
     if args.hash_algorithms:
         print("\n" + "-" * 50)
